@@ -373,6 +373,9 @@ body::after{
     <div class="page-tab" data-page="stocks">
       <div class="pt-dot"></div>STOCKS
     </div>
+    <div class="page-tab" data-page="portfolio">
+      <div class="pt-dot" style="background:#6699ff;"></div>MY PORTFOLIO
+    </div>
   </div>
 
   <!-- ══ MARKET TICKER ══ -->
@@ -527,6 +530,60 @@ body::after{
     </div>
 
   </div><!-- /view-stocks -->
+
+  <!-- ══ PORTFOLIO VIEW ══ -->
+  <div class="view" id="view-portfolio" style="grid-template-columns:1fr 260px;grid-template-rows:1fr;">
+
+    <!-- LEFT: Portfolio chart + range/holding controls -->
+    <div class="panel" style="display:flex;flex-direction:column;">
+
+      <!-- Controls bar -->
+      <div style="background:#050505;border-bottom:1px solid #1a1a2e;padding:6px 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex-shrink:0;">
+        <span style="font-size:9px;color:#6699ff;text-transform:uppercase;letter-spacing:2px;font-weight:bold;margin-right:4px;">HOLDING</span>
+        <div id="pf-holding-picker" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
+        <div style="width:1px;height:18px;background:var(--border2);margin:0 6px;"></div>
+        <span style="font-size:9px;color:var(--gray);text-transform:uppercase;letter-spacing:1px;margin-right:4px;">RANGE</span>
+        <div id="pf-range-picker" style="display:flex;gap:4px;"></div>
+        <div style="width:1px;height:18px;background:var(--border2);margin:0 6px;"></div>
+        <span id="pf-chart-loading" style="font-size:9px;color:var(--gray);display:none;">Loading…</span>
+      </div>
+
+      <!-- Summary strip -->
+      <div style="padding:8px 12px 4px;display:flex;align-items:baseline;gap:16px;flex-shrink:0;border-bottom:1px solid #0d0d0d;">
+        <span id="pf-chart-name" style="font-size:12px;font-weight:bold;color:#6699ff;text-transform:uppercase;letter-spacing:2px;">TOTAL PORTFOLIO</span>
+        <span id="pf-chart-val"  style="font-size:28px;font-weight:900;color:var(--white);">—</span>
+        <span id="pf-chart-chg"  style="font-size:16px;font-weight:bold;" class="neu">—</span>
+        <span id="pf-chart-pct"  style="font-size:13px;" class="neu">—</span>
+        <span id="pf-chart-range" style="font-size:10px;color:var(--gray);"></span>
+      </div>
+
+      <!-- Chart canvas -->
+      <div class="stocks-chart-box" style="flex:1;margin:8px;">
+        <canvas id="chart-portfolio"></canvas>
+      </div>
+    </div>
+
+    <!-- RIGHT: Holdings breakdown -->
+    <div class="panel" style="display:flex;flex-direction:column;background:#05050f;">
+      <div class="phdr" style="background:#0a0a1a;border-bottom-color:#2979ff;">
+        <span class="ptitle" style="color:#6699ff;">HOLDINGS BREAKDOWN</span>
+        <span class="pinfo" id="pf-total-label">—</span>
+      </div>
+
+      <!-- Allocation bar -->
+      <div id="pf-alloc-bar" style="height:10px;display:flex;flex-shrink:0;"></div>
+
+      <!-- Holdings list -->
+      <div class="mkt-body" id="pf-breakdown-rows" style="flex:1;"></div>
+
+      <!-- Sector summary -->
+      <div class="phdr" style="background:#0a0a1a;border-bottom-color:#2979ff;border-top:1px solid var(--border2);">
+        <span class="ptitle" style="color:#6699ff;">BY SECTOR</span>
+      </div>
+      <div id="pf-sectors" style="padding:6px 8px;flex-shrink:0;"></div>
+    </div>
+
+  </div><!-- /view-portfolio -->
 
   <!-- ══ STATUS BAR (debug / live feed status) ══ -->
   <div id="status-bar" style="
@@ -1192,13 +1249,19 @@ document.querySelector('.page-tabs').addEventListener('click', e=>{
   const page = tab.dataset.page;
   document.querySelectorAll('.page-tab').forEach(t=>t.classList.remove('active'));
   tab.classList.add('active');
-  document.getElementById('view-news').classList.toggle('active', page==='news');
-  document.getElementById('view-stocks').classList.toggle('active', page==='stocks');
+  document.getElementById('view-news').classList.toggle('active',     page==='news');
+  document.getElementById('view-stocks').classList.toggle('active',   page==='stocks');
+  document.getElementById('view-portfolio').classList.toggle('active', page==='portfolio');
   if(page==='stocks' && !stocksChartsInited){
     stocksChartsInited = true;
     initStocksCharts();
   }
   if(page==='stocks'){ renderPortfolioRows(); renderPortfolioTicker(); }
+  if(page==='portfolio' && !pfViewInited){
+    pfViewInited = true;
+    initPortfolioView();
+  }
+  if(page==='portfolio'){ renderPfBreakdown(); }
 });
 
 // ════════════════════════════════════════════
@@ -1455,6 +1518,245 @@ function renderPortfolioRows(){
     const up=totalChg>=0;
     chgEl.innerHTML=`<span style="color:${up?'var(--green)':'var(--red)'}">Day ${up?'+':''}$${Math.abs(totalChg).toFixed(0)} | $${totalVal.toLocaleString('en-US',{maximumFractionDigits:0})}</span>`;
   }
+}
+
+// ════════════════════════════════════════════
+//  PORTFOLIO VIEW
+// ════════════════════════════════════════════
+let pfViewInited = false;
+let pfChart = null;
+let pfHoldingSym = 'TOTAL';  // 'TOTAL' or a specific symbol
+let pfRange = {label:'1M', range:'1mo', interval:'1d'};
+
+const PF_RANGES = [
+  {label:'1D',  range:'1d',  interval:'5m'},
+  {label:'1M',  range:'1mo', interval:'1d'},
+  {label:'6M',  range:'6mo', interval:'1wk'},
+  {label:'YTD', range:'ytd', interval:'1d'},
+  {label:'1Y',  range:'1y',  interval:'1wk'},
+];
+
+function buildPfPickerUI(){
+  const hp = document.getElementById('pf-holding-picker');
+  const rp = document.getElementById('pf-range-picker');
+  if(!hp||!rp) return;
+
+  const holdings = [{s:'TOTAL',l:'All Holdings'}, ...PORTFOLIO_HOLDINGS];
+  hp.innerHTML = holdings.map(({s,l})=>
+    `<button class="pick-btn${s===pfHoldingSym?' active':''}" data-pfsym="${s}">${s==='TOTAL'?'ALL':s}</button>`
+  ).join('');
+
+  rp.innerHTML = PF_RANGES.map(r=>
+    `<button class="pick-btn${r.label===pfRange.label?' active':''}" data-pfrange="${r.label}">${r.label}</button>`
+  ).join('');
+
+  hp.addEventListener('click', e=>{
+    const btn=e.target.closest('.pick-btn'); if(!btn||!btn.dataset.pfsym) return;
+    pfHoldingSym=btn.dataset.pfsym;
+    hp.querySelectorAll('.pick-btn').forEach(b=>b.classList.toggle('active',b.dataset.pfsym===pfHoldingSym));
+    loadPfChart();
+  });
+  rp.addEventListener('click', e=>{
+    const btn=e.target.closest('.pick-btn'); if(!btn) return;
+    pfRange=PF_RANGES.find(r=>r.label===btn.dataset.pfrange)||PF_RANGES[1];
+    rp.querySelectorAll('.pick-btn').forEach(b=>b.classList.toggle('active',b.dataset.pfrange===pfRange.label));
+    loadPfChart();
+  });
+}
+
+// Fetch historical closes for one symbol, returns [{x:Date, y:price}]
+async function fetchHist(sym, range, interval){
+  return fetchChartData(encodeURIComponent(sym), range, interval);
+}
+
+// Build combined portfolio value series by summing qty*price for each date
+async function buildTotalSeries(range, interval){
+  // Fetch all holdings in parallel
+  const results = await Promise.all(
+    PORTFOLIO_HOLDINGS.map(async ({s, qty})=>{
+      const pts = await fetchHist(s, range, interval);
+      return {qty, pts};
+    })
+  );
+  // Align on dates — use the holding with the most data points as the date axis
+  const dateSets = results.map(r=>r.pts);
+  const longest = dateSets.reduce((a,b)=>a.length>=b.length?a:b,[]);
+  if(!longest.length) return [];
+
+  return longest.map(({x}, di)=>{
+    let total=0;
+    results.forEach(({qty, pts})=>{
+      // Find closest point by index or interpolate simply by index ratio
+      const idx = Math.round(di * (pts.length-1) / Math.max(longest.length-1,1));
+      const pt = pts[idx];
+      if(pt?.y) total += pt.y * qty;
+    });
+    return {x, y: parseFloat(total.toFixed(2))};
+  }).filter(d=>d.y>0);
+}
+
+async function loadPfChart(){
+  const loadEl=document.getElementById('pf-chart-loading');
+  if(loadEl) loadEl.style.display='inline';
+
+  let data=[], label='', color='';
+
+  if(pfHoldingSym==='TOTAL'){
+    data = await buildTotalSeries(pfRange.range, pfRange.interval);
+    label = 'TOTAL PORTFOLIO';
+  } else {
+    const h = PORTFOLIO_HOLDINGS.find(h=>h.s===pfHoldingSym);
+    const pts = await fetchHist(pfHoldingSym, pfRange.range, pfRange.interval);
+    data = pts.map(({x,y})=>({x, y: parseFloat((y*(h?.qty||1)).toFixed(2))}));
+    label = `${pfHoldingSym} · ${h?.qty} shares`;
+    color = h?.color||'#6699ff';
+  }
+
+  if(loadEl) loadEl.style.display='none';
+  if(!data.length) return;
+
+  const first=data[0]?.y||0, last=data[data.length-1]?.y||0;
+  const change=last-first, pct=first?(change/first*100):0;
+  const up=change>=0;
+  const lineColor = pfHoldingSym==='TOTAL' ? (up?'#00e676':'#ff1744') : (PORTFOLIO_HOLDINGS.find(h=>h.s===pfHoldingSym)?.color||'#6699ff');
+
+  document.getElementById('pf-chart-name').textContent = label;
+  document.getElementById('pf-chart-val').textContent  = '$'+last.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const chgEl=document.getElementById('pf-chart-chg');
+  chgEl.textContent=(up?'+':'')+change.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  chgEl.className=up?'pos':'neg';
+  const pctEl=document.getElementById('pf-chart-pct');
+  pctEl.textContent=`(${up?'+':''}${pct.toFixed(2)}%)`;
+  pctEl.className=up?'pos':'neg';
+  document.getElementById('pf-chart-range').textContent=pfRange.label;
+
+  const canvas=document.getElementById('chart-portfolio');
+  if(!canvas) return;
+  const cfg={
+    type:'line',
+    data:{datasets:[{
+      data, borderColor:lineColor, borderWidth:2,
+      pointRadius:0, pointHoverRadius:5,
+      pointHoverBackgroundColor:lineColor,
+      fill:true,
+      backgroundColor:lineColor.startsWith('#')
+        ? lineColor+'15'
+        : 'rgba(102,153,255,0.07)',
+      tension:0.3,
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:{duration:400},
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#111',borderColor:'#1a1a2e',borderWidth:1,
+          titleColor:'#aaa',bodyColor:lineColor,padding:12,
+          callbacks:{
+            title:items=>{
+              const d=new Date(items[0].parsed.x);
+              return d.toLocaleString('en-US',pfRange.label==='1D'
+                ?{hour:'numeric',minute:'2-digit',hour12:true}
+                :{month:'short',day:'numeric',year:'numeric'});
+            },
+            label:c=>' $'+c.parsed.y?.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),
+          },
+        },
+      },
+      scales:{
+        x:{type:'time',display:true,
+          ticks:{color:'#333',font:{size:9},maxTicksLimit:8},
+          grid:{color:'#080810'},
+          time:{displayFormats:{minute:'h:mm a',hour:'h a',day:'MMM d',week:'MMM d',month:'MMM yy'}},
+        },
+        y:{display:true,position:'right',
+          ticks:{color:'#555',font:{size:10},callback:v=>'$'+v.toLocaleString('en-US',{maximumFractionDigits:0})},
+          grid:{color:'#0a0a14'},
+        },
+      },
+    },
+  };
+  if(pfChart) pfChart.destroy();
+  pfChart = new Chart(canvas.getContext('2d'), cfg);
+}
+
+function renderPfBreakdown(){
+  // Holdings rows with value, allocation %
+  const totalVal = PORTFOLIO_HOLDINGS.reduce((sum,{s,qty})=>{
+    return sum + (mkt[s]?.price||0)*qty;
+  },0);
+
+  document.getElementById('pf-total-label').textContent =
+    '$'+totalVal.toLocaleString('en-US',{maximumFractionDigits:0});
+
+  // Allocation color bar
+  const allocBar = document.getElementById('pf-alloc-bar');
+  if(allocBar){
+    allocBar.innerHTML = PORTFOLIO_HOLDINGS.map(({s,qty,color})=>{
+      const val=(mkt[s]?.price||0)*qty;
+      const pct=totalVal?val/totalVal*100:0;
+      return `<div style="width:${pct}%;background:${color};height:100%;"></div>`;
+    }).join('');
+  }
+
+  // Rows
+  const el=document.getElementById('pf-breakdown-rows');
+  if(el){
+    el.innerHTML=`<div class="msec">`+PORTFOLIO_HOLDINGS.map(({s,l,qty,sector,color})=>{
+      const d=mkt[s];
+      const val=(d?.price||0)*qty;
+      const alloc=totalVal?val/totalVal*100:0;
+      const pct=d?.pct||0;
+      return `<div class="mrow" style="cursor:pointer;padding:4px 8px;"
+        onclick="(()=>{pfHoldingSym='${s}';document.querySelectorAll('#pf-holding-picker .pick-btn').forEach(b=>b.classList.toggle('active',b.dataset.pfsym==='${s}'));loadPfChart();})()"
+      >
+        <div style="display:flex;flex-direction:column;min-width:48px;">
+          <span style="font-weight:bold;font-size:10px;color:${color};">${s}</span>
+          <span style="font-size:7px;color:#444;">${qty%1===0?qty:qty.toFixed(1)}sh</span>
+        </div>
+        <div style="flex:1;padding:0 6px;">
+          <div style="height:3px;background:#111;border-radius:1px;margin-bottom:2px;">
+            <div style="width:${Math.min(alloc*3,100)}%;height:100%;background:${color};border-radius:1px;"></div>
+          </div>
+          <span style="font-size:8px;color:#555;">${alloc.toFixed(1)}% · ${sector}</span>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:11px;font-weight:bold;" class="${cls(d?.change||0)}">$${val.toLocaleString('en-US',{maximumFractionDigits:0})}</div>
+          <div style="font-size:9px;" class="${cls(d?.change||0)}">${sgn(pct)}${Math.abs(pct).toFixed(2)}%</div>
+        </div>
+      </div>`;
+    }).join('')+`</div>`;
+  }
+
+  // Sector summary
+  const sectors={};
+  PORTFOLIO_HOLDINGS.forEach(({s,qty,sector,color})=>{
+    const val=(mkt[s]?.price||0)*qty;
+    if(!sectors[sector]) sectors[sector]={val:0,color};
+    sectors[sector].val+=val;
+  });
+  const secEl=document.getElementById('pf-sectors');
+  if(secEl){
+    secEl.innerHTML=Object.entries(sectors)
+      .sort((a,b)=>b[1].val-a[1].val)
+      .map(([name,{val,color}])=>{
+        const pct=totalVal?val/totalVal*100:0;
+        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:${color};flex-shrink:0;"></div>
+          <span style="font-size:9px;color:#888;flex:1;">${name}</span>
+          <div style="width:80px;height:4px;background:#111;border-radius:2px;">
+            <div style="width:${pct}%;height:100%;background:${color};border-radius:2px;"></div>
+          </div>
+          <span style="font-size:9px;color:#555;min-width:32px;text-align:right;">${pct.toFixed(0)}%</span>
+        </div>`;
+      }).join('');
+  }
+}
+
+async function initPortfolioView(){
+  buildPfPickerUI();
+  renderPfBreakdown();
+  loadPfChart();
 }
 
 // ════════════════════════════════════════════
