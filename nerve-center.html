@@ -332,6 +332,25 @@ body::after{
 .chart-lbl{font-size:8px;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;padding:4px 6px 0;}
 .conflict-badge{background:#4a0000;color:#ff6666;border-left:3px solid #ff1744;}
 
+/* ── MARKETS VIEW ── */
+.commod-row{
+  display:grid;
+  grid-template-columns:90px 1fr 70px 60px 60px;
+  padding:5px 8px;border-bottom:1px solid #0d0d0d;
+  font-size:10px;align-items:center;gap:4px;
+}
+.commod-row:hover{background:#0d0d0d;}
+.commod-name{color:var(--accent2);font-weight:bold;font-size:9px;}
+.commod-bar-wrap{background:#111;height:4px;border-radius:2px;overflow:hidden;}
+.commod-bar{height:100%;border-radius:2px;transition:width .4s;}
+.def-row{
+  display:grid;
+  grid-template-columns:52px 1fr 70px 56px 56px;
+  padding:4px 8px;border-bottom:1px solid #0d0d0d;
+  font-size:10px;align-items:center;gap:4px;
+}
+.def-row:hover{background:#0d0d0d;}
+
 /* ── INTERACTIVE CHART CONTROLS ── */
 .pick-btn{
   padding:3px 10px;font-size:10px;font-weight:bold;
@@ -375,6 +394,9 @@ body::after{
     </div>
     <div class="page-tab" data-page="portfolio">
       <div class="pt-dot" style="background:#6699ff;"></div>MY PORTFOLIO
+    </div>
+    <div class="page-tab" data-page="markets">
+      <div class="pt-dot" style="background:#ffaa00;"></div>MARKETS
     </div>
   </div>
 
@@ -584,6 +606,80 @@ body::after{
     </div>
 
   </div><!-- /view-portfolio -->
+
+  <!-- ══ MARKETS REACTION LAYER VIEW ══ -->
+  <div class="view" id="view-markets" style="grid-template-columns:1fr 1fr 230px;grid-template-rows:1fr;">
+
+    <!-- COL 1: TradingView main chart + commodities ticker -->
+    <div class="panel" style="display:flex;flex-direction:column;">
+      <div class="phdr" style="background:#0a0800;border-bottom-color:var(--accent2);">
+        <span class="ptitle" style="color:var(--accent2);">⚡ REACTION LAYER</span>
+        <div style="display:flex;gap:4px;" id="tv-sym-btns">
+          <button class="pick-btn active" data-tvsym="CAPITALCOM:OIL_CRUDE">WTI OIL</button>
+          <button class="pick-btn" data-tvsym="CAPITALCOM:NATURAL_GAS">NAT GAS</button>
+          <button class="pick-btn" data-tvsym="CAPITALCOM:GOLD">GOLD</button>
+          <button class="pick-btn" data-tvsym="CAPITALCOM:SILVER">SILVER</button>
+          <button class="pick-btn" data-tvsym="NASDAQ:LMT">LMT</button>
+          <button class="pick-btn" data-tvsym="NASDAQ:RTX">RTX</button>
+          <button class="pick-btn" data-tvsym="NYSE:ZIM">ZIM</button>
+          <button class="pick-btn" data-tvsym="NYSE:MATX">MATX</button>
+          <button class="pick-btn" data-tvsym="SP:SPX">S&amp;P 500</button>
+        </div>
+      </div>
+      <!-- TradingView Advanced Chart Widget -->
+      <div id="tv-chart-wrap" style="flex:1;min-height:0;position:relative;">
+        <div id="tv-widget-container" style="width:100%;height:100%;"></div>
+      </div>
+    </div>
+
+    <!-- COL 2: TradingView Market Overview + Screener side-by-side -->
+    <div class="panel" style="display:flex;flex-direction:column;gap:1px;background:var(--border);">
+
+      <!-- Top half: Commodities deep-dive table -->
+      <div style="flex:1;display:flex;flex-direction:column;background:var(--bg-panel);min-height:0;">
+        <div class="phdr" style="background:#0a0800;border-bottom-color:var(--accent2);">
+          <span class="ptitle" style="color:var(--accent2);">Commodities</span>
+          <span class="pinfo" id="commod-updated">—</span>
+        </div>
+        <div class="mkt-body" id="commod-panel" style="flex:1;"></div>
+      </div>
+
+      <!-- Bottom half: Defense + Shipping -->
+      <div style="flex:1;display:flex;flex-direction:column;background:var(--bg-panel);min-height:0;">
+        <div class="phdr" style="background:#0a0000;border-bottom-color:var(--red);">
+          <span class="ptitle" style="color:var(--red);">Defense &amp; Shipping</span>
+        </div>
+        <div class="mkt-body" id="defense-panel" style="flex:1;"></div>
+      </div>
+
+    </div>
+
+    <!-- COL 3: TradingView mini-charts + reaction news -->
+    <div class="panel" style="display:flex;flex-direction:column;gap:1px;background:var(--border);">
+
+      <!-- Mini sparkline cards for key commodities -->
+      <div style="background:var(--bg-panel);flex-shrink:0;padding:6px 8px;border-bottom:1px solid var(--border2);">
+        <div class="slbl" style="margin-bottom:5px;">COMMODITY MINI-CHARTS</div>
+        <!-- TradingView Symbol Overview widgets stacked -->
+        <div id="tv-mini-oil" style="margin-bottom:4px;"></div>
+        <div id="tv-mini-gold" style="margin-bottom:4px;"></div>
+        <div id="tv-mini-gas"></div>
+      </div>
+
+      <!-- News: commodities + defense -->
+      <div style="flex:1;display:flex;flex-direction:column;background:var(--bg-panel);min-height:0;">
+        <div class="tabs" id="markets-news-tabs">
+          <div class="tab active" data-mnkey="business">📊 Markets</div>
+          <div class="tab" data-mnkey="military">🛡 Defense</div>
+        </div>
+        <div class="news-body" id="feed-markets-news" style="flex:1;">
+          <div class="loading">Loading…</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- /view-markets -->
 
   <!-- ══ STATUS BAR (debug / live feed status) ══ -->
   <div id="status-bar" style="
@@ -867,7 +963,11 @@ async function fetchYhSymbol(sym){
 }
 
 async function fetchStocks(){
-  const syms=[...SYM.indices,...SYM.stocks,...SYM.commodities,...SYM.bonds,...SYM.portfolio].map(x=>x.s);
+  // Include extra commodities and defense/shipping for the Markets view
+  const extraCommod = ['HO=F','HG=F','PL=F','ZS=F'];
+  const extraDefShip= ['BA','HII','LDOS','CACI','ZIM','MATX','SBLK','DAC','GOGL','FDX','UPS'];
+  const syms=[...SYM.indices,...SYM.stocks,...SYM.commodities,...SYM.bonds,...SYM.portfolio,
+              ...extraCommod.map(s=>({s})),...extraDefShip.map(s=>({s}))].map(x=>x.s);
   setStatus(`Stocks → YF v8 (${syms.length} symbols)…`,'#ffaa00');
   let ok=0;
   await Promise.all(syms.map(async sym=>{
@@ -1249,9 +1349,10 @@ document.querySelector('.page-tabs').addEventListener('click', e=>{
   const page = tab.dataset.page;
   document.querySelectorAll('.page-tab').forEach(t=>t.classList.remove('active'));
   tab.classList.add('active');
-  document.getElementById('view-news').classList.toggle('active',     page==='news');
-  document.getElementById('view-stocks').classList.toggle('active',   page==='stocks');
+  document.getElementById('view-news').classList.toggle('active',      page==='news');
+  document.getElementById('view-stocks').classList.toggle('active',    page==='stocks');
   document.getElementById('view-portfolio').classList.toggle('active', page==='portfolio');
+  document.getElementById('view-markets').classList.toggle('active',   page==='markets');
   if(page==='stocks' && !stocksChartsInited){
     stocksChartsInited = true;
     initStocksCharts();
@@ -1262,6 +1363,11 @@ document.querySelector('.page-tabs').addEventListener('click', e=>{
     initPortfolioView();
   }
   if(page==='portfolio'){ renderPfBreakdown(); }
+  if(page==='markets' && !marketsInited){
+    marketsInited=true;
+    initMarketsView();
+  }
+  if(page==='markets'){ renderCommodPanel(); renderDefensePanel(); }
 });
 
 // ════════════════════════════════════════════
@@ -1757,6 +1863,223 @@ async function initPortfolioView(){
   buildPfPickerUI();
   renderPfBreakdown();
   loadPfChart();
+}
+
+// ════════════════════════════════════════════
+//  MARKETS REACTION LAYER
+// ════════════════════════════════════════════
+let marketsInited = false;
+let tvWidget = null;
+let tvCurrentSym = 'CAPITALCOM:OIL_CRUDE';
+
+const COMMODITIES_DETAIL = [
+  {s:'CL=F',  l:'WTI Crude Oil',   unit:'$/bbl', color:'#ff6600', cat:'energy'},
+  {s:'NG=F',  l:'Natural Gas',     unit:'$/MMBtu',color:'#ffaa44',cat:'energy'},
+  {s:'HO=F',  l:'Heating Oil',     unit:'$/gal', color:'#ff8800',cat:'energy'},
+  {s:'GC=F',  l:'Gold',            unit:'$/oz',  color:'#ffd700',cat:'metals'},
+  {s:'SI=F',  l:'Silver',          unit:'$/oz',  color:'#c0c0c0',cat:'metals'},
+  {s:'HG=F',  l:'Copper',          unit:'$/lb',  color:'#b87333',cat:'metals'},
+  {s:'PL=F',  l:'Platinum',        unit:'$/oz',  color:'#e5e4e2',cat:'metals'},
+  {s:'ZW=F',  l:'Wheat',           unit:'¢/bu',  color:'#f5deb3',cat:'agri'},
+  {s:'ZC=F',  l:'Corn',            unit:'¢/bu',  color:'#fada5e',cat:'agri'},
+  {s:'ZS=F',  l:'Soybeans',        unit:'¢/bu',  color:'#8db600',cat:'agri'},
+];
+
+const DEFENSE_SHIPPING = [
+  // Defense
+  {s:'LMT', l:'Lockheed Martin',  cat:'defense', color:'#ff4444'},
+  {s:'RTX', l:'Raytheon Tech',    cat:'defense', color:'#ff4444'},
+  {s:'NOC', l:'Northrop Grumman', cat:'defense', color:'#ff4444'},
+  {s:'GD',  l:'General Dynamics', cat:'defense', color:'#ff4444'},
+  {s:'BA',  l:'Boeing',           cat:'defense', color:'#ff6666'},
+  {s:'HII', l:'Huntington Ing.',  cat:'defense', color:'#ff6666'},
+  {s:'LDOS',l:'Leidos Holdings',  cat:'defense', color:'#ff6666'},
+  {s:'CACI',l:'CACI International',cat:'defense',color:'#ff6666'},
+  // Shipping / Logistics
+  {s:'ZIM', l:'ZIM Integrated',   cat:'shipping',color:'#00aaff'},
+  {s:'MATX',l:'Matson Inc.',      cat:'shipping',color:'#00aaff'},
+  {s:'SBLK',l:'Star Bulk Carriers',cat:'shipping',color:'#44ccff'},
+  {s:'DAC', l:'Danaos Corp',      cat:'shipping',color:'#44ccff'},
+  {s:'GOGL',l:'Golden Ocean',     cat:'shipping',color:'#44ccff'},
+  {s:'FDX', l:'FedEx',            cat:'logistics',color:'#ff6600'},
+  {s:'UPS', l:'UPS',              cat:'logistics',color:'#996633'},
+];
+
+// Load TradingView advanced chart widget
+function loadTVChart(sym){
+  tvCurrentSym = sym;
+  const container = document.getElementById('tv-widget-container');
+  if(!container) return;
+  container.innerHTML = '';
+  const script = document.createElement('script');
+  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+  script.async = true;
+  script.innerHTML = JSON.stringify({
+    autosize: true,
+    symbol: sym,
+    interval: 'D',
+    timezone: 'America/New_York',
+    theme: 'dark',
+    style: '1',
+    locale: 'en',
+    backgroundColor: 'rgba(0,0,0,1)',
+    gridColor: 'rgba(30,30,30,1)',
+    hide_top_toolbar: false,
+    hide_legend: false,
+    allow_symbol_change: true,
+    save_image: false,
+    details: true,
+    hotlist: false,
+    calendar: false,
+    studies: ['RSI@tv-basicstudies','MACD@tv-basicstudies'],
+    container_id: 'tv-widget-container',
+  });
+  container.appendChild(script);
+}
+
+// TradingView mini symbol overview widget
+function loadTVMini(containerId, sym, label){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  el.innerHTML='';
+  const div = document.createElement('div');
+  div.className='tradingview-widget-container';
+  div.style.cssText='height:80px;width:100%;';
+  div.innerHTML=`<div class="tradingview-widget-container__widget"></div>`;
+  const script = document.createElement('script');
+  script.src='https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js';
+  script.async=true;
+  script.innerHTML=JSON.stringify({
+    symbols:[[label, sym+'|1D']],
+    chartOnly:true,
+    width:'100%',
+    height:'80',
+    locale:'en',
+    colorTheme:'dark',
+    autosize:false,
+    showVolume:false,
+    showMA:false,
+    hideDateRanges:true,
+    hideMarketStatus:true,
+    hideSymbolLogo:true,
+    scalePosition:'no',
+    scaleMode:'Normal',
+    fontFamily:'Courier New',
+    fontSize:'10',
+    noTimeScale:true,
+    valuesTracking:'1',
+    changeMode:'price-and-percent',
+    chartType:'area',
+    lineWidth:2,
+    lineType:0,
+    dateRanges:['1d|1'],
+  });
+  div.appendChild(script);
+  el.appendChild(div);
+}
+
+// TV symbol picker button logic
+function initTVPicker(){
+  document.getElementById('tv-sym-btns')?.addEventListener('click', e=>{
+    const btn = e.target.closest('.pick-btn');
+    if(!btn||!btn.dataset.tvsym) return;
+    document.querySelectorAll('#tv-sym-btns .pick-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    loadTVChart(btn.dataset.tvsym);
+  });
+}
+
+function renderCommodPanel(){
+  const el = document.getElementById('commod-panel');
+  if(!el) return;
+  const cats = {energy:'ENERGY',metals:'METALS',agri:'AGRICULTURE'};
+  let lastCat='';
+  el.innerHTML = COMMODITIES_DETAIL.map(({s,l,unit,color,cat})=>{
+    const d=mkt[s];
+    const price=d?.price||0, pct=d?.pct||0, change=d?.change||0;
+    const up=change>=0;
+    const barW=Math.min(Math.abs(pct)/5*100,100);
+    let header='';
+    if(cat!==lastCat){
+      lastCat=cat;
+      header=`<div style="padding:4px 8px 2px;font-size:8px;color:${color};text-transform:uppercase;letter-spacing:2px;border-top:1px solid #111;">${cats[cat]||cat}</div>`;
+    }
+    return header+`<div class="commod-row" style="cursor:pointer;" onclick="(()=>{document.querySelectorAll('#tv-sym-btns .pick-btn').forEach(b=>b.classList.remove('active'));})()">
+      <span class="commod-name" style="color:${color};">${l}</span>
+      <div class="commod-bar-wrap">
+        <div class="commod-bar" style="width:${barW}%;background:${up?'#00e676':'#ff1744'};"></div>
+      </div>
+      <span style="font-weight:bold;text-align:right;color:${up?'var(--green)':'var(--red)'};">$${fmt(price,s)}</span>
+      <span style="text-align:right;font-size:9px;" class="${cls(change)}">${sgn(pct)}${Math.abs(pct).toFixed(2)}%</span>
+      <span style="text-align:right;font-size:8px;color:#555;">${unit}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('commod-updated').textContent =
+    new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+}
+
+function renderDefensePanel(){
+  const el = document.getElementById('defense-panel');
+  if(!el) return;
+  const cats = {defense:'DEFENSE',shipping:'SHIPPING',logistics:'LOGISTICS'};
+  let lastCat='';
+  el.innerHTML = DEFENSE_SHIPPING.map(({s,l,cat,color})=>{
+    const d=mkt[s];
+    const price=d?.price||0, pct=d?.pct||0, change=d?.change||0;
+    let header='';
+    if(cat!==lastCat){
+      lastCat=cat;
+      header=`<div style="padding:3px 8px 1px;font-size:8px;color:${color};text-transform:uppercase;letter-spacing:2px;border-top:1px solid #111;">${cats[cat]||cat}</div>`;
+    }
+    const mc = d?.price && d?.vol ? '$'+((d.price*(d.vol||0))/1e9).toFixed(1)+'B vol' : '';
+    return header+`<div class="def-row">
+      <span style="font-weight:bold;font-size:9px;color:${color};">${s}</span>
+      <span style="font-size:9px;color:#666;overflow:hidden;white-space:nowrap;">${l}</span>
+      <span style="font-weight:bold;text-align:right;" class="${cls(change)}">$${fmt(price,s)}</span>
+      <span style="text-align:right;font-size:9px;" class="${cls(change)}">${sgn(pct)}${Math.abs(pct).toFixed(2)}%</span>
+      <span style="text-align:right;font-size:8px;color:#444;">${mc}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderMarketsNews(key){
+  const el=document.getElementById('feed-markets-news');
+  if(!el) return;
+  el.innerHTML = renderItems(news[key]||[]||news.business, key==='military'?'military':'business');
+  startScroller('feed-markets-news');
+}
+
+async function initMarketsView(){
+  // Add defense/shipping symbols to market fetch if not already there
+  const extra = DEFENSE_SHIPPING.map(x=>x.s);
+  const alreadyFetched = new Set(Object.keys(mkt));
+  const needed = extra.filter(s=>!alreadyFetched.has(s));
+  if(needed.length){
+    await Promise.all(needed.map(async s=>{
+      const d=await fetchYhSymbol(s);
+      if(d) mkt[s]=d;
+    }));
+  }
+  renderCommodPanel();
+  renderDefensePanel();
+
+  // TradingView chart
+  initTVPicker();
+  loadTVChart('CAPITALCOM:OIL_CRUDE');
+
+  // Mini sparklines
+  loadTVMini('tv-mini-oil','CAPITALCOM:OIL_CRUDE','WTI Oil');
+  loadTVMini('tv-mini-gold','CAPITALCOM:GOLD','Gold');
+  loadTVMini('tv-mini-gas','CAPITALCOM:NATURAL_GAS','Nat Gas');
+
+  // Markets news tabs
+  renderMarketsNews('business');
+  document.getElementById('markets-news-tabs')?.addEventListener('click', e=>{
+    const tab=e.target.closest('.tab'); if(!tab) return;
+    document.querySelectorAll('#markets-news-tabs .tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    renderMarketsNews(tab.dataset.mnkey);
+  });
 }
 
 // ════════════════════════════════════════════
