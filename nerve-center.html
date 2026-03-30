@@ -331,6 +331,18 @@ body::after{
 .hcell .hv{display:block;font-size:10px;}
 .chart-lbl{font-size:8px;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;padding:4px 6px 0;}
 .conflict-badge{background:#4a0000;color:#ff6666;border-left:3px solid #ff1744;}
+
+/* ── INTERACTIVE CHART CONTROLS ── */
+.pick-btn{
+  padding:3px 10px;font-size:10px;font-weight:bold;
+  font-family:'Courier New',monospace;
+  text-transform:uppercase;letter-spacing:1px;
+  background:#111;border:1px solid var(--border2);
+  color:var(--gray);cursor:pointer;border-radius:2px;
+  transition:all .15s;white-space:nowrap;
+}
+.pick-btn:hover{background:#1a1a1a;color:var(--white);border-color:#444;}
+.pick-btn.active{background:var(--accent);color:#000;border-color:var(--accent);}
 </style>
 </head>
 <body>
@@ -457,54 +469,45 @@ body::after{
   </div><!-- /view-news -->
 
   <!-- ══ STOCKS VIEW ══ -->
-  <div class="view" id="view-stocks" style="grid-template-columns:1fr 1fr 300px;grid-template-rows:auto 1fr;">
+  <div class="view" id="view-stocks" style="grid-template-columns:1fr 300px;">
 
-    <!-- S&P 500 chart -->
+    <!-- MAIN CHART PANEL -->
     <div class="panel" style="display:flex;flex-direction:column;">
-      <div class="phdr">
-        <span class="ptitle" style="color:var(--green)">S&amp;P 500</span>
-        <span class="pinfo" id="sp-price">—</span>
+
+      <!-- Company picker -->
+      <div style="background:#050505;border-bottom:1px solid var(--border2);padding:6px 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex-shrink:0;">
+        <span style="font-size:9px;color:var(--gray);text-transform:uppercase;letter-spacing:1px;margin-right:4px;">SYMBOL</span>
+        <div id="stock-picker" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
+        <div style="width:1px;height:20px;background:var(--border2);margin:0 6px;"></div>
+        <span style="font-size:9px;color:var(--gray);text-transform:uppercase;letter-spacing:1px;margin-right:4px;">RANGE</span>
+        <div id="range-picker" style="display:flex;gap:4px;"></div>
+        <div style="width:1px;height:20px;background:var(--border2);margin:0 6px;"></div>
+        <span id="chart-loading" style="font-size:9px;color:var(--gray);display:none;">Loading…</span>
       </div>
-      <div style="padding:8px;flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;">
-        <div class="stocks-chart-lbl">
-          INTRADAY · 5m
-          <span id="sp-val">—</span>
-          <em id="sp-chg" class="neu">—</em>
-        </div>
-        <div class="stocks-chart-box" style="flex:1;">
-          <canvas id="chart-sp500"></canvas>
-        </div>
+
+      <!-- Price display -->
+      <div style="padding:8px 12px 4px;display:flex;align-items:baseline;gap:14px;flex-shrink:0;">
+        <span id="ic-name" style="font-size:13px;font-weight:bold;color:var(--accent2);text-transform:uppercase;letter-spacing:2px;">—</span>
+        <span id="ic-price" style="font-size:28px;font-weight:900;color:var(--white);">—</span>
+        <span id="ic-chg" style="font-size:16px;font-weight:bold;" class="neu">—</span>
+        <span id="ic-pct" style="font-size:13px;" class="neu">—</span>
+        <span id="ic-range-lbl" style="font-size:10px;color:var(--gray);margin-left:4px;"></span>
+      </div>
+
+      <!-- Chart -->
+      <div class="stocks-chart-box" style="flex:1;margin:0 8px 8px;">
+        <canvas id="chart-interactive"></canvas>
       </div>
     </div>
 
-    <!-- NASDAQ chart -->
-    <div class="panel" style="display:flex;flex-direction:column;">
-      <div class="phdr">
-        <span class="ptitle" style="color:var(--cyan)">NASDAQ</span>
-        <span class="pinfo" id="nq-price">—</span>
-      </div>
-      <div style="padding:8px;flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;">
-        <div class="stocks-chart-lbl">
-          INTRADAY · 5m
-          <span id="nq-val">—</span>
-          <em id="nq-chg" class="neu">—</em>
-        </div>
-        <div class="stocks-chart-box" style="flex:1;">
-          <canvas id="chart-nasdaq"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <!-- Right: Top 10 S&P ticker + Business news -->
+    <!-- Right: Top 10 S&P ticker + rows + news -->
     <div class="panel" style="display:flex;flex-direction:column;">
       <div class="phdr">
         <span class="ptitle" style="color:var(--accent2)">Top 10 S&amp;P 500</span>
       </div>
-      <!-- Ticker strip -->
       <div class="sp500-ticker">
         <div class="sp500-ticker-inner" id="sp500-ticker-inner">Loading…</div>
       </div>
-      <!-- Stock rows -->
       <div class="mkt-body" id="sp500-rows" style="flex:1;"></div>
       <div class="phdr" style="border-top:1px solid var(--border2);">
         <span class="ptitle" style="color:var(--accent2)">Market News</span>
@@ -1163,54 +1166,154 @@ const TOP10_SP500 = [
   {s:'JPM',l:'JPMorgan'},
 ];
 
-let chartSP=null, chartNQ=null;
+// ════════════════════════════════════════════
+//  INTERACTIVE CHART
+// ════════════════════════════════════════════
+const CHART_SYMBOLS = [
+  {s:'^GSPC', l:'S&P 500'}, {s:'^IXIC', l:'NASDAQ'},  {s:'^DJI',  l:'DOW'},
+  {s:'AAPL',  l:'AAPL'},    {s:'MSFT',  l:'MSFT'},     {s:'NVDA',  l:'NVDA'},
+  {s:'AMZN',  l:'AMZN'},    {s:'GOOGL', l:'GOOGL'},    {s:'META',  l:'META'},
+  {s:'TSLA',  l:'TSLA'},    {s:'BTC-USD',l:'BTC'},     {s:'GC=F',  l:'GOLD'},
+];
 
-async function buildStocksChart(canvasId, sym, displaySym, valId, chgId){
-  const data = await fetchChartData(encodeURIComponent(sym),'1d','5m');
-  const canvas = document.getElementById(canvasId);
-  if(!canvas||!data.length) return;
+const RANGES = [
+  {label:'1D', range:'1d',  interval:'5m'},
+  {label:'1M', range:'1mo', interval:'1d'},
+  {label:'6M', range:'6mo', interval:'1wk'},
+  {label:'YTD',range:'ytd', interval:'1d'},
+  {label:'1Y', range:'1y',  interval:'1wk'},
+];
+
+let icChart = null;
+let icSym   = '^GSPC';
+let icRange = RANGES[0];
+
+function buildPickerUI(){
+  const sp = document.getElementById('stock-picker');
+  const rp = document.getElementById('range-picker');
+  if(!sp||!rp) return;
+
+  sp.innerHTML = CHART_SYMBOLS.map(({s,l})=>
+    `<button class="pick-btn${s===icSym?' active':''}" data-sym="${s}">${l}</button>`
+  ).join('');
+
+  rp.innerHTML = RANGES.map(r=>
+    `<button class="pick-btn${r.label===icRange.label?' active':''}" data-range="${r.label}">${r.label}</button>`
+  ).join('');
+
+  sp.addEventListener('click', e=>{
+    const btn=e.target.closest('.pick-btn'); if(!btn) return;
+    icSym=btn.dataset.sym;
+    sp.querySelectorAll('.pick-btn').forEach(b=>b.classList.toggle('active',b.dataset.sym===icSym));
+    loadInteractiveChart();
+  });
+
+  rp.addEventListener('click', e=>{
+    const btn=e.target.closest('.pick-btn'); if(!btn) return;
+    icRange=RANGES.find(r=>r.label===btn.dataset.range)||RANGES[0];
+    rp.querySelectorAll('.pick-btn').forEach(b=>b.classList.toggle('active',b.dataset.range===icRange.label));
+    loadInteractiveChart();
+  });
+}
+
+async function loadInteractiveChart(){
+  const loadEl=document.getElementById('chart-loading');
+  if(loadEl) loadEl.style.display='inline';
+
+  const sym = icSym;
+  const {range, interval} = icRange;
+
+  // For daily+ ranges use 1d interval on longer fetches
+  const data = await fetchChartData(encodeURIComponent(sym), range, interval);
+
+  if(loadEl) loadEl.style.display='none';
+  if(!data.length) return;
+
   const first=data[0]?.y||0, last=data[data.length-1]?.y||0;
-  const up = last>=first;
-  const color = up?'#00e676':'#ff1744';
-  const pct = first?((last-first)/first*100):0;
-  document.getElementById(valId).textContent = '$'+last.toLocaleString('en-US',{maximumFractionDigits:2});
-  const chgEl = document.getElementById(chgId);
-  chgEl.textContent = (up?'+':'')+pct.toFixed(2)+'%';
-  chgEl.className = up?'pos':'neg';
-  const cfg = {
+  const change=last-first, pct=first?change/first*100:0;
+  const up=change>=0;
+  const color=up?'#00e676':'#ff1744';
+  const meta = mkt[sym];
+
+  const info = CHART_SYMBOLS.find(x=>x.s===sym);
+  document.getElementById('ic-name').textContent  = info?.l||sym;
+  document.getElementById('ic-price').textContent = '$'+last.toLocaleString('en-US',{maximumFractionDigits:2});
+  const chgEl=document.getElementById('ic-chg');
+  chgEl.textContent=(up?'+':'')+change.toLocaleString('en-US',{maximumFractionDigits:2});
+  chgEl.className=up?'pos':'neg';
+  const pctEl=document.getElementById('ic-pct');
+  pctEl.textContent=`(${up?'+':''}${pct.toFixed(2)}%)`;
+  pctEl.className=up?'pos':'neg';
+  document.getElementById('ic-range-lbl').textContent=icRange.label;
+
+  const canvas=document.getElementById('chart-interactive');
+  if(!canvas) return;
+
+  const xDisplay = icRange.label==='1D' ? false : true;
+  const xFmt = icRange.label==='1D'
+    ? {hour:'numeric',minute:'2-digit',hour12:true}
+    : icRange.label==='1Y'||icRange.label==='6M'
+      ? {month:'short',year:'2-digit'}
+      : {month:'short',day:'numeric'};
+
+  const cfg={
     type:'line',
-    data:{datasets:[{data,borderColor:color,borderWidth:2,pointRadius:0,fill:true,
-      backgroundColor:up?'rgba(0,230,118,0.07)':'rgba(255,23,68,0.07)',tension:0.3}]},
+    data:{datasets:[{
+      data, borderColor:color, borderWidth:2,
+      pointRadius:0, pointHoverRadius:4,
+      pointHoverBackgroundColor:color,
+      fill:true,
+      backgroundColor: up?'rgba(0,230,118,0.06)':'rgba(255,23,68,0.06)',
+      tension:0.2,
+    }]},
     options:{
-      responsive:true,maintainAspectRatio:false,animation:false,
-      plugins:{legend:{display:false},tooltip:{
-        mode:'index',intersect:false,
-        callbacks:{label:c=>'$'+c.parsed.y?.toLocaleString('en-US',{maximumFractionDigits:2})},
-        backgroundColor:'#111',borderColor:'#333',borderWidth:1,titleColor:'#aaa',bodyColor:'#fff',
-      }},
+      responsive:true, maintainAspectRatio:false, animation:{duration:300},
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#111',borderColor:'#333',borderWidth:1,
+          titleColor:'#aaa',bodyColor:color,padding:10,
+          callbacks:{
+            title: items => {
+              const d=new Date(items[0].parsed.x);
+              return d.toLocaleString('en-US', icRange.label==='1D'
+                ? {hour:'numeric',minute:'2-digit',hour12:true}
+                : {month:'short',day:'numeric',year:'numeric'});
+            },
+            label: c => ' $'+c.parsed.y?.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),
+          },
+        },
+        // Crosshair line
+        annotation: undefined,
+      },
       scales:{
-        x:{type:'time',display:false},
-        y:{display:true,position:'right',
-          ticks:{color:'#555',font:{size:9},callback:v=>v.toLocaleString()},
+        x:{
+          type:'time', display:xDisplay,
+          ticks:{color:'#444',font:{size:9},maxTicksLimit:10},
+          grid:{color:'#0d0d0d'},
+          time:{displayFormats:{minute:'h:mm a',hour:'h a',day:'MMM d',week:'MMM d',month:'MMM yy'}},
+        },
+        y:{
+          display:true, position:'right',
+          ticks:{color:'#555',font:{size:10},callback:v=>'$'+v.toLocaleString('en-US',{maximumFractionDigits:0})},
           grid:{color:'#111'},
         },
       },
     },
   };
-  if(canvasId==='chart-sp500'){ if(chartSP) chartSP.destroy(); chartSP=new Chart(canvas.getContext('2d'),cfg); }
-  else { if(chartNQ) chartNQ.destroy(); chartNQ=new Chart(canvas.getContext('2d'),cfg); }
+
+  if(icChart) icChart.destroy();
+  icChart = new Chart(canvas.getContext('2d'), cfg);
 }
 
 async function initStocksCharts(){
+  buildPickerUI();
   renderSP500Ticker();
   renderSP500Rows();
-  // Show business news in stocks panel
   document.getElementById('feed-stocks-news').innerHTML = renderItems(news.business,'business');
   startScroller('feed-stocks-news');
-  await Promise.all([
-    buildStocksChart('chart-sp500', '^GSPC','S&P 500','sp-val','sp-chg'),
-    buildStocksChart('chart-nasdaq','^IXIC','NASDAQ','nq-val','nq-chg'),
-  ]);
+  loadInteractiveChart();
 }
 
 function renderSP500Ticker(){
