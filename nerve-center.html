@@ -431,6 +431,7 @@ body::after{
         <div class="tab active" data-key="us2">🇺🇸 U.S. News</div>
         <div class="tab" data-key="business2">💼 Finance</div>
         <div class="tab" data-key="science">🔬 Science</div>
+        <div class="tab" data-key="portfolio2">💼 Portfolio</div>
       </div>
       <div class="news-body" id="feed2">
         <div class="loading">Loading U.S. news…</div>
@@ -500,19 +501,27 @@ body::after{
       </div>
     </div>
 
-    <!-- Right: Top 10 S&P ticker + rows + news -->
+    <!-- Right: Portfolio watchlist + tabbed news -->
     <div class="panel" style="display:flex;flex-direction:column;">
-      <div class="phdr">
-        <span class="ptitle" style="color:var(--accent2)">Top 10 S&amp;P 500</span>
+
+      <!-- Portfolio header + ticker -->
+      <div class="phdr" style="background:#0a0a14;border-bottom-color:#2979ff;">
+        <span class="ptitle" style="color:#6699ff;">MY PORTFOLIO</span>
+        <span class="pinfo" id="pf-total-chg" style="color:var(--gray);">—</span>
       </div>
-      <div class="sp500-ticker">
-        <div class="sp500-ticker-inner" id="sp500-ticker-inner">Loading…</div>
+      <div class="sp500-ticker" style="border-bottom-color:#1a1a2e;">
+        <div class="sp500-ticker-inner" id="pf-ticker-inner">Loading…</div>
       </div>
-      <div class="mkt-body" id="sp500-rows" style="flex:1;"></div>
-      <div class="phdr" style="border-top:1px solid var(--border2);">
-        <span class="ptitle" style="color:var(--accent2)">Market News</span>
+
+      <!-- Portfolio rows -->
+      <div class="mkt-body" id="pf-rows" style="flex:1.2;"></div>
+
+      <!-- Tabbed news: Market vs Portfolio -->
+      <div class="tabs" id="stocks-news-tabs" style="border-top:1px solid var(--border2);">
+        <div class="tab active" data-snkey="market">📈 Market</div>
+        <div class="tab" data-snkey="portfolio">💼 Portfolio</div>
       </div>
-      <div class="news-body" id="feed-stocks-news" style="flex:1.2;">
+      <div class="news-body" id="feed-stocks-news" style="flex:1.5;">
         <div class="loading">Loading…</div>
       </div>
     </div>
@@ -590,6 +599,14 @@ const SYM = {
     {s:'^TNX',l:'10Y Treasury'}, {s:'^TYX',l:'30Y Treasury'},
     {s:'^FVX',l:'5Y Treasury'},
   ],
+  portfolio:[
+    {s:'RKLB', l:'Rocket Lab'},    {s:'ASTS', l:'AST SpaceMobile'},
+    {s:'GWH',  l:'ESS Tech'},      {s:'IBIT', l:'Bitcoin ETF'},
+    {s:'AVUS', l:'Avantis US'},    {s:'IAUM', l:'Gold Trust'},
+    {s:'SIVR', l:'Silver ETF'},    {s:'VSS',  l:'Vanguard Intl SM'},
+    {s:'VXUS', l:'Vanguard Intl'}, {s:'SWPPX',l:'Schwab S&P 500'},
+    {s:'VCX',  l:'Fundrise Innov'},
+  ],
 };
 
 // ════════════════════════════════════════════
@@ -600,14 +617,22 @@ const GECKO = {'BTC-USD':'bitcoin','ETH-USD':'ethereum','SOL-USD':'solana','XRP-
 // ════════════════════════════════════════════
 //  RSS FEEDS — proven sources that work with rss2json
 // ════════════════════════════════════════════
+const GN = 'https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=';
 const FEEDS = {
-  world   : {p:'https://www.theguardian.com/world/rss',             b:'http://feeds.bbci.co.uk/news/world/rss.xml'},
-  us      : {p:'https://feeds.npr.org/1003/rss.xml',                b:'https://feeds.npr.org/1001/rss.xml'},
-  business: {p:'https://feeds.marketwatch.com/marketwatch/topstories/', b:'https://feeds.reuters.com/reuters/businessNews'},
-  tech    : {p:'https://feeds.arstechnica.com/arstechnica/index',   b:'https://techcrunch.com/feed/'},
-  military: {p:'https://www.defensenews.com/arc/outboundfeeds/rss/',b:'https://breakingdefense.com/feed/'},
-  science  : {p:'https://www.sciencedaily.com/rss/all.xml',          b:'https://rss.sciencemag.org/rss/current.xml'},
-  conflict : {p:'http://feeds.bbci.co.uk/news/world/middle_east/rss.xml', b:'https://www.aljazeera.com/xml/rss/all.xml'},
+  world    : {p:'https://www.theguardian.com/world/rss',              b:'http://feeds.bbci.co.uk/news/world/rss.xml'},
+  us       : {p:'https://feeds.npr.org/1003/rss.xml',                 b:'https://feeds.npr.org/1001/rss.xml'},
+  business : {p:'https://feeds.marketwatch.com/marketwatch/topstories/',b:'https://feeds.reuters.com/reuters/businessNews'},
+  tech     : {p:'https://feeds.arstechnica.com/arstechnica/index',    b:'https://techcrunch.com/feed/'},
+  military : {p:'https://www.defensenews.com/arc/outboundfeeds/rss/', b:'https://breakingdefense.com/feed/'},
+  science  : {p:'https://www.sciencedaily.com/rss/all.xml',           b:'https://rss.sciencemag.org/rss/current.xml'},
+  conflict : {p:'http://feeds.bbci.co.uk/news/world/middle_east/rss.xml',b:'https://www.aljazeera.com/xml/rss/all.xml'},
+  // Portfolio sector feeds — one per major theme
+  pf_space : {p:`${GN}Rocket+Lab+RKLB+OR+AST+SpaceMobile+ASTS+space+stock`,   b:`${GN}RKLB+OR+ASTS+aerospace+satellite`},
+  pf_crypto: {p:`${GN}bitcoin+ETF+IBIT+OR+crypto+market+investing`,            b:`${GN}bitcoin+price+crypto+regulation`},
+  pf_metals: {p:`${GN}gold+silver+precious+metals+ETF+market`,                 b:`${GN}IAUM+SIVR+gold+silver+inflation`},
+  pf_intl  : {p:`${GN}international+stock+market+VXUS+VSS+emerging+markets`,   b:`${GN}global+equity+ETF+trade+tariffs`},
+  pf_clean : {p:`${GN}ESS+Tech+GWH+energy+storage+clean+energy+investing`,     b:`${GN}battery+storage+cleantech+sector`},
+  pf_broad : {p:'https://feeds.marketwatch.com/marketwatch/topstories/',        b:`${GN}S%26P500+index+SWPPX+AVUS+equity+market`},
 };
 
 // ════════════════════════════════════════════
@@ -626,12 +651,13 @@ function setStatus(msg, color='#666'){
 //  STATE
 // ════════════════════════════════════════════
 let mkt  = {};   // symbol → {price,change,pct}
-let news = {world:[],us:[],business:[],tech:[],military:[],science:[],conflict:[]};
+let news = {world:[],us:[],business:[],tech:[],military:[],science:[],conflict:[],
+            portfolio:[],pf_space:[],pf_crypto:[],pf_metals:[],pf_intl:[],pf_clean:[],pf_broad:[]};
 
 // current tab selections
 let tab1key = 'world';
 let tab2key = 'us2';
-const tab2map = {us2:'us', business2:'business', science:'science'};
+const tab2map = {us2:'us', business2:'business', science:'science', portfolio2:'portfolio'};
 const tab1map = {world:'world', us:'us', business:'business'};
 
 // ════════════════════════════════════════════
@@ -784,7 +810,7 @@ async function fetchYhSymbol(sym){
 }
 
 async function fetchStocks(){
-  const syms=[...SYM.indices,...SYM.stocks,...SYM.commodities,...SYM.bonds].map(x=>x.s);
+  const syms=[...SYM.indices,...SYM.stocks,...SYM.commodities,...SYM.bonds,...SYM.portfolio].map(x=>x.s);
   setStatus(`Stocks → YF v8 (${syms.length} symbols)…`,'#ffaa00');
   let ok=0;
   await Promise.all(syms.map(async sym=>{
@@ -793,6 +819,7 @@ async function fetchStocks(){
   }));
   setStatus(`Stocks ✓ ${ok}/${syms.length} loaded`, ok>0?'#00e676':'#ff1744');
   renderMktPanel(); renderHdrIdx(); renderTickerStrip();
+  renderPortfolioRows(); renderPortfolioTicker();
   try{localStorage.setItem(CFG.cacheKey,JSON.stringify(mkt));}catch(e){}
   document.getElementById('mkt-updated').textContent=
     new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
@@ -1014,8 +1041,10 @@ async function fetchAllNews(){
   try{ localStorage.setItem(CFG.newsCacheKey, JSON.stringify(news)); }catch(e){}
 }
 
-const BADGE = {world:'b-world',us:'b-us',business:'b-biz',tech:'b-tech',military:'b-mil',science:'b-sci'};
-const BLBL  = {world:'WORLD',us:'U.S.',business:'BIZ',tech:'TECH',military:'DEF',science:'SCI'};
+const BADGE = {world:'b-world',us:'b-us',business:'b-biz',tech:'b-tech',military:'b-mil',science:'b-sci',
+               portfolio:'b-biz',pf_space:'b-tech',pf_crypto:'b-tech',pf_metals:'b-biz',pf_intl:'b-world',pf_clean:'b-sci',pf_broad:'b-biz'};
+const BLBL  = {world:'WORLD',us:'U.S.',business:'BIZ',tech:'TECH',military:'DEF',science:'SCI',
+               portfolio:'PORT',pf_space:'SPACE',pf_crypto:'CRYPTO',pf_metals:'METALS',pf_intl:'INTL',pf_clean:'CLEAN',pf_broad:'MARKET'};
 
 function renderItems(items, catKey){
   if(!items||!items.length)
@@ -1044,6 +1073,22 @@ const KEY_TO_EL = {
 };
 
 function renderFeed(dataKey){
+  // If a portfolio sub-feed updated, refresh stocks news panel if it's showing portfolio
+  if(dataKey.startsWith('pf_') && stocksNewsKey==='portfolio') renderStocksNews('portfolio');
+  // Portfolio tab in news overview = merged portfolio feeds
+  if(dataKey==='portfolio' || dataKey.startsWith('pf_')){
+    const k2 = tab2map[tab2key];
+    if(k2==='portfolio'){
+      const merged=['pf_space','pf_crypto','pf_metals','pf_intl','pf_clean','pf_broad']
+        .flatMap(k=>news[k]||[])
+        .filter((x,i,a)=>a.findIndex(y=>y.title===x.title)===i)
+        .sort((a,b)=>b.time-a.time).slice(0,CFG.maxItems);
+      news.portfolio=merged;
+      document.getElementById('feed2').innerHTML=renderItems(merged,'portfolio');
+      startScroller('feed2');
+    }
+    return;
+  }
   // feed1 shows whatever tab1key is active
   const k1 = tab1map[tab1key] || 'world';
   const k2 = tab2map[tab2key] || 'us';
@@ -1070,7 +1115,7 @@ function renderFeed(dataKey){
 }
 
 function renderAllFeeds(){
-  ['world','us','business','tech','military','science'].forEach(k=> renderFeed(k));
+  ['world','us','business','tech','military','science','pf_space','pf_crypto','pf_metals','pf_intl','pf_clean','pf_broad'].forEach(k=>renderFeed(k));
 }
 
 function updateBticker(){
@@ -1153,28 +1198,47 @@ document.querySelector('.page-tabs').addEventListener('click', e=>{
     stocksChartsInited = true;
     initStocksCharts();
   }
-  if(page==='stocks') renderSP500Rows();
+  if(page==='stocks'){ renderPortfolioRows(); renderPortfolioTicker(); }
 });
 
 // ════════════════════════════════════════════
-//  STOCKS VIEW — CHARTS + TICKER + NEWS
+//  PORTFOLIO HOLDINGS (both accounts combined)
 // ════════════════════════════════════════════
-const TOP10_SP500 = [
-  {s:'AAPL',l:'Apple'},    {s:'MSFT',l:'Microsoft'}, {s:'NVDA',l:'Nvidia'},
-  {s:'AMZN',l:'Amazon'},   {s:'GOOGL',l:'Alphabet'}, {s:'META',l:'Meta'},
-  {s:'TSLA',l:'Tesla'},    {s:'BRK-B',l:'Berkshire'},{s:'AVGO',l:'Broadcom'},
-  {s:'JPM',l:'JPMorgan'},
+const PORTFOLIO_HOLDINGS = [
+  {s:'RKLB', l:'Rocket Lab',      qty:15,    sector:'Space',        color:'#cc44ff'},
+  {s:'ASTS', l:'AST SpaceMobile', qty:7,     sector:'Space',        color:'#cc44ff'},
+  {s:'GWH',  l:'ESS Tech',        qty:8,     sector:'Clean Energy', color:'#00e676'},
+  {s:'IBIT', l:'Bitcoin ETF',     qty:16,    sector:'Crypto',       color:'#f7931a'},
+  {s:'AVUS', l:'Avantis US ETF',  qty:82,    sector:'US Equity',    color:'#2979ff'},
+  {s:'IAUM', l:'Gold Trust',      qty:30,    sector:'Gold',         color:'#ffd700'},
+  {s:'SIVR', l:'Silver ETF',      qty:19,    sector:'Silver',       color:'#c0c0c0'},
+  {s:'VCX',  l:'Fundrise Innov.', qty:8,     sector:'Innovation',   color:'#ff6600'},
+  {s:'VSS',  l:'Vanguard Intl SM',qty:16,    sector:'Intl',         color:'#00e5ff'},
+  {s:'VXUS', l:'Vanguard Intl',   qty:109.4, sector:'Intl',         color:'#00e5ff'},
+  {s:'SWPPX',l:'Schwab S&P 500',  qty:583.3, sector:'US Equity',    color:'#2979ff'},
 ];
 
 // ════════════════════════════════════════════
 //  INTERACTIVE CHART
 // ════════════════════════════════════════════
-const CHART_SYMBOLS = [
-  {s:'^GSPC', l:'S&P 500'}, {s:'^IXIC', l:'NASDAQ'},  {s:'^DJI',  l:'DOW'},
-  {s:'AAPL',  l:'AAPL'},    {s:'MSFT',  l:'MSFT'},     {s:'NVDA',  l:'NVDA'},
-  {s:'AMZN',  l:'AMZN'},    {s:'GOOGL', l:'GOOGL'},    {s:'META',  l:'META'},
-  {s:'TSLA',  l:'TSLA'},    {s:'BTC-USD',l:'BTC'},     {s:'GC=F',  l:'GOLD'},
+// Groups: indices | mega caps | MY PORTFOLIO
+const CHART_SYMBOL_GROUPS = [
+  {group:'INDICES',  syms:[
+    {s:'^GSPC',l:'S&P 500'},{s:'^IXIC',l:'NASDAQ'},{s:'^DJI',l:'DOW'},
+  ]},
+  {group:'MEGA CAPS', syms:[
+    {s:'AAPL',l:'AAPL'},{s:'MSFT',l:'MSFT'},{s:'NVDA',l:'NVDA'},
+    {s:'AMZN',l:'AMZN'},{s:'GOOGL',l:'GOOGL'},{s:'META',l:'META'},
+    {s:'TSLA',l:'TSLA'},{s:'GC=F',l:'GOLD'},
+  ]},
+  {group:'MY PORTFOLIO', syms:[
+    {s:'RKLB',l:'RKLB'},{s:'ASTS',l:'ASTS'},{s:'GWH',l:'GWH'},
+    {s:'IBIT',l:'IBIT'},{s:'AVUS',l:'AVUS'},{s:'IAUM',l:'IAUM'},
+    {s:'SIVR',l:'SIVR'},{s:'VXUS',l:'VXUS'},{s:'VSS',l:'VSS'},
+    {s:'SWPPX',l:'SWPPX'},
+  ]},
 ];
+const CHART_SYMBOLS = CHART_SYMBOL_GROUPS.flatMap(g=>g.syms);
 
 const RANGES = [
   {label:'1D', range:'1d',  interval:'5m'},
@@ -1193,8 +1257,13 @@ function buildPickerUI(){
   const rp = document.getElementById('range-picker');
   if(!sp||!rp) return;
 
-  sp.innerHTML = CHART_SYMBOLS.map(({s,l})=>
-    `<button class="pick-btn${s===icSym?' active':''}" data-sym="${s}">${l}</button>`
+  // Grouped symbol buttons with group labels
+  sp.innerHTML = CHART_SYMBOL_GROUPS.map(g=>
+    `<span style="font-size:8px;color:#444;text-transform:uppercase;letter-spacing:1px;padding:0 4px;align-self:center;">${g.group}</span>`+
+    g.syms.map(({s,l})=>
+      `<button class="pick-btn${s===icSym?' active':''}" data-sym="${s}">${l}</button>`
+    ).join('')+
+    `<span style="width:1px;height:18px;background:var(--border2);margin:0 4px;align-self:center;"></span>`
   ).join('');
 
   rp.innerHTML = RANGES.map(r=>
@@ -1202,7 +1271,7 @@ function buildPickerUI(){
   ).join('');
 
   sp.addEventListener('click', e=>{
-    const btn=e.target.closest('.pick-btn'); if(!btn) return;
+    const btn=e.target.closest('.pick-btn'); if(!btn||!btn.dataset.sym) return;
     icSym=btn.dataset.sym;
     sp.querySelectorAll('.pick-btn').forEach(b=>b.classList.toggle('active',b.dataset.sym===icSym));
     loadInteractiveChart();
@@ -1309,38 +1378,83 @@ async function loadInteractiveChart(){
 
 async function initStocksCharts(){
   buildPickerUI();
-  renderSP500Ticker();
-  renderSP500Rows();
-  document.getElementById('feed-stocks-news').innerHTML = renderItems(news.business,'business');
+  renderPortfolioTicker();
+  renderPortfolioRows();
+  renderStocksNews('market');
   startScroller('feed-stocks-news');
+  // Wire up stocks news tabs
+  document.getElementById('stocks-news-tabs').addEventListener('click', e=>{
+    const tab=e.target.closest('.tab'); if(!tab) return;
+    document.querySelectorAll('#stocks-news-tabs .tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    renderStocksNews(tab.dataset.snkey);
+  });
   loadInteractiveChart();
 }
 
-function renderSP500Ticker(){
-  const html = [...TOP10_SP500,...TOP10_SP500].map(({s})=>{
+let stocksNewsKey = 'market';
+function renderStocksNews(key){
+  stocksNewsKey = key;
+  const el = document.getElementById('feed-stocks-news');
+  if(!el) return;
+  if(key==='market'){
+    el.innerHTML = renderItems(news.business,'business');
+  } else {
+    // Merge all portfolio news feeds, sort by time
+    const merged = ['pf_space','pf_crypto','pf_metals','pf_intl','pf_clean','pf_broad']
+      .flatMap(k=>news[k]||[])
+      .filter((x,i,a)=>a.findIndex(y=>y.title===x.title)===i)
+      .sort((a,b)=>b.time-a.time)
+      .slice(0,40);
+    el.innerHTML = merged.length ? renderItems(merged,'business') : '<div class="loading">Loading portfolio news…</div>';
+  }
+  if(scrollers['feed-stocks-news']) clearInterval(scrollers['feed-stocks-news']);
+  startScroller('feed-stocks-news');
+}
+
+function renderPortfolioTicker(){
+  const doubled = [...PORTFOLIO_HOLDINGS,...PORTFOLIO_HOLDINGS];
+  const html = doubled.map(({s,l,color})=>{
     const d=mkt[s]; if(!d) return '';
     const p=d.pct||0;
     return `<div class="sptk">
-      <span class="sptk-sym">${s}</span>
+      <span class="sptk-sym" style="color:${color}">${s}</span>
       <span class="sptk-px ${cls(d.change)}">$${fmt(d.price,s)}</span>
       <span class="sptk-chg ${cls(d.change)}">${sgn(p)}${Math.abs(p).toFixed(2)}%</span>
     </div>`;
   }).filter(Boolean).join('');
-  if(html) document.getElementById('sp500-ticker-inner').innerHTML=html;
+  const el=document.getElementById('pf-ticker-inner');
+  if(html&&el) el.innerHTML=html;
 }
 
-function renderSP500Rows(){
-  const el=document.getElementById('sp500-rows');
+function renderPortfolioRows(){
+  const el=document.getElementById('pf-rows');
   if(!el) return;
-  el.innerHTML = `<div class="msec">`+TOP10_SP500.map(({s,l},i)=>{
+  let totalVal=0, totalChg=0;
+  const rows = PORTFOLIO_HOLDINGS.map(({s,l,qty,sector,color})=>{
     const d=mkt[s];
-    if(!d) return `<div class="mrow"><span class="msym">${i+1}. ${s}</span><span class="mpx neu">—</span><span class="mch neu">—</span></div>`;
-    return `<div class="mrow">
-      <span class="msym" style="min-width:110px;font-size:10px;">${i+1}. ${l}</span>
-      <span class="mpx ${cls(d.change)}" style="font-size:12px;">$${fmt(d.price,s)}</span>
-      <span class="mch ${cls(d.change)}">${sgn(d.pct)}${d.pct.toFixed(2)}%</span>
+    if(!d) return `<div class="mrow">
+      <span class="msym" style="color:${color};min-width:50px;">${s}</span>
+      <span style="font-size:8px;color:#555;flex:1;">${l}</span>
+      <span class="mpx neu">—</span><span class="mch neu">—</span>
     </div>`;
-  }).join('')+`</div>`;
+    const val=d.price*qty, dayChg=d.change*qty;
+    totalVal+=val; totalChg+=dayChg;
+    const pct=d.pct||0;
+    return `<div class="mrow" style="cursor:pointer;" onclick="document.querySelector('[data-sym=\\'${s}\\']')?.click()">
+      <span class="msym" style="color:${color};min-width:46px;font-size:9px;">${s}</span>
+      <span style="font-size:8px;color:#666;flex:1;overflow:hidden;white-space:nowrap;">${sector}</span>
+      <span class="mpx ${cls(d.change)}" style="font-size:11px;min-width:58px;text-align:right;">$${fmt(d.price,s)}</span>
+      <span class="mch ${cls(d.change)}" style="min-width:52px;text-align:right;">${sgn(pct)}${pct.toFixed(2)}%</span>
+    </div>`;
+  }).join('');
+  el.innerHTML=`<div class="msec">${rows}</div>`;
+  // Update total change badge
+  const chgEl=document.getElementById('pf-total-chg');
+  if(chgEl&&totalVal>0){
+    const up=totalChg>=0;
+    chgEl.innerHTML=`<span style="color:${up?'var(--green)':'var(--red)'}">Day ${up?'+':''}$${Math.abs(totalChg).toFixed(0)} | $${totalVal.toLocaleString('en-US',{maximumFractionDigits:0})}</span>`;
+  }
 }
 
 // ════════════════════════════════════════════
